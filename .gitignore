@@ -2,3 +2,5 @@
 /appsettings.json
 /bin
 /obj
+
+*.db
