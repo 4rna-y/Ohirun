@@ -2,11 +2,16 @@ using System;
 using System.Threading.Tasks;
 using Discord;
 using Discord.WebSocket;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NLog.Extensions.Logging;
+using Ohirun.Commands;
+using Ohirun.Configuration;
+using Ohirun.Data;
+using Ohirun.Services;
 
 namespace Ohirun
 {
@@ -18,8 +23,16 @@ namespace Ohirun
             
             BotService botService = host.Services.GetRequiredService<BotService>();
             
-            await botService.StartAsync();
-            await host.RunAsync();
+            try
+            {
+                await botService.StartAsync();
+                await host.RunAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error: {ex.Message}");
+                Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            }
         }
 
         private static IHostBuilder CreateHostBuilder(string[] args) =>
@@ -35,15 +48,28 @@ namespace Ohirun
                 })
                 .ConfigureServices((context, services) =>
                 {
-                    services.Configure<DiscordConfig>(context.Configuration.GetSection("Discord"));
+                    services.Configure<ApplicationConfig>(context.Configuration.GetSection("Discord"));
+                    
+                    services.AddDbContext<ApplicationDbContext>(options =>
+                        options.UseSqlite(context.Configuration.GetConnectionString("DefaultConnection")));
                     
                     services.AddSingleton(new DiscordSocketClient(new DiscordSocketConfig
                     {
                         LogLevel = LogSeverity.Info,
                         MessageCacheSize = 100,
-                        GatewayIntents = GatewayIntents.Guilds | GatewayIntents.GuildMessages | GatewayIntents.MessageContent
+                        GatewayIntents = GatewayIntents.Guilds,
+                        UseInteractionSnowflakeDate = false,
+                        DefaultRetryMode = RetryMode.AlwaysRetry
                     }));
                     
+                    services.AddScoped<LunchDecisionService>();
+                    services.AddScoped<DataManagementService>();
+                    services.AddScoped<OhiruCommand>();
+                    services.AddScoped<AddCommand>();
+                    services.AddScoped<LinkCommand>();
+                    services.AddScoped<ListCommand>();
+                    services.AddSingleton<ISlashCommandRegistry, SlashCommandRegistry>();
+                    services.AddSingleton<SlashCommandService>();
                     services.AddSingleton<BotService>();
                     services.AddHostedService<BotService>();
                 });
