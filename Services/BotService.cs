@@ -3,10 +3,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using Discord;
 using Discord.WebSocket;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ohirun.Configuration;
+using Ohirun.Data;
 
 namespace Ohirun.Services
 {
@@ -16,17 +19,25 @@ namespace Ohirun.Services
         private readonly ILogger<BotService> logger;
         private readonly ApplicationConfig applicationConfig;
         private readonly SlashCommandService slashCommandService;
+        private readonly IServiceProvider serviceProvider;
 
-        public BotService(DiscordSocketClient client, ILogger<BotService> logger, IOptions<ApplicationConfig> applicationOptions, SlashCommandService slashCommandService)
+        public BotService(DiscordSocketClient client, ILogger<BotService> logger, IOptions<ApplicationConfig> applicationOptions, SlashCommandService slashCommandService, IServiceProvider serviceProvider)
         {
             this.client = client;
             this.logger = logger;
             this.applicationConfig = applicationOptions.Value;
             this.slashCommandService = slashCommandService;
+            this.serviceProvider = serviceProvider;
         }
 
         public async Task StartAsync()
         {
+            using (var scope = serviceProvider.CreateScope())
+            {
+                var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                await context.Database.EnsureCreatedAsync();
+            }
+
             client.Log += LogAsync;
             client.Ready += ReadyAsync;
             client.MessageReceived += MessageReceivedAsync;
